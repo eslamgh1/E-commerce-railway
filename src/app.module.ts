@@ -22,20 +22,21 @@ import { ReviewModule } from './module/review/review.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
-    envFilePath: './config/.env',
-    isGlobal: true
-  }), 
+      // Updated logic here
+      envFilePath: process.env.NODE_ENV === 'production' ? undefined : './config/.env',
+      isGlobal: true
+    }),
 // cashing
   CacheModule.register({
   isGlobal: true,
   ttl:5000
 }),
 
-  MongooseModule.forRoot(process.env.DB_URL_LOCAL as string , {
+  MongooseModule.forRoot(process.env.DB_URL_ONLINE as string , {
     
   onConnectionCreate: (connection: Connection) => {
-    connection.on('connected', () => console.log(`Mongo DB connected successfully ${process.env.DB_URL_LOCAL}`));  
-    connection.on('disconnected', () => console.log(`Mongo DB disconnected successfully ${process.env.DB_URL_LOCAL}`));
+    connection.on('connected', () => console.log(`Mongo DB connected successfully ${process.env.DB_URL_ONLINE}`));  
+    connection.on('disconnected', () => console.log(`Mongo DB disconnected successfully ${process.env.DB_URL_ONLINE}`));
 
     return connection;
   }
