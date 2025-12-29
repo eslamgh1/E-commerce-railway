@@ -32,32 +32,60 @@ export class UserService {
     }
 
     // signUp method is used to register a new user
+    // async signUp(body: UserDto) {
+    //     const { fName, lName, email, password, age, gender } = body
+
+    //     const userExist = await this.userRepo.findOne({filter: { email }})
+    //     if (userExist) {
+
+    //         throw new BadRequestException("User already exists")
+    //     }
+
+    //     const user = await this.userRepo.create({
+    //         email,
+    //         password,
+    //         age,
+    //         fName,
+    //         lName,
+    //         gender: gender ? (gender as userGender) : userGender.MALE
+    //     })
+
+
+    //     if (!user) {
+    //         throw new BadRequestException("User not created")
+    //     }
+
+    //     await this.sendOtp(user._id)
+    //     return user
+    // }
+    
+    // Temporary disabled OTP for testing - signUp will skip OTP verification
+    // This is for development only - in production, OTP should be required
     async signUp(body: UserDto) {
-        const { fName, lName, email, password, age, gender } = body
+    const { fName, lName, email, password, age, gender } = body;
 
-        const userExist = await this.userRepo.findOne({filter: { email }})
-        if (userExist) {
-
-            throw new BadRequestException("User already exists")
-        }
-
-        const user = await this.userRepo.create({
-            email,
-            password,
-            age,
-            fName,
-            lName,
-            gender: gender ? (gender as userGender) : userGender.MALE
-        })
-
-
-        if (!user) {
-            throw new BadRequestException("User not created")
-        }
-
-        await this.sendOtp(user._id)
-        return user
+    const userExist = await this.userRepo.findOne({ filter: { email } });
+    if (userExist) {
+        throw new BadRequestException("User already exists");
     }
+
+    const user = await this.userRepo.create({
+        email,
+        password, // Ensure this is hashed before saving!
+        age,
+        fName,
+        lName,
+        confirmed: true, // Force to true so it doesn't cause issues later
+        gender: gender ? (gender as userGender) : userGender.MALE
+    });
+
+    if (!user) {
+        throw new BadRequestException("User not created");
+    }
+
+    // No more OTP call here
+    return user;
+}
 
     // ResendOtp method is used to register a new user
     async ResendOtp(body: ResendOtpDto) {
@@ -127,52 +155,87 @@ export class UserService {
         return { message: "Email is confirmed successfully" ,user }
     }
 
-    // login method 
-    async login(body: loginDto) {
-        const { email , password} = body
+    // // login method 
+    // async login(body: loginDto) {
+    //     const { email , password} = body
 
-        const user = await this.userRepo.findOne({
-            filter: {
-                email,
-                confirmed: { $exists: true }
-            },
-            options: {
-                populate: {
-                    path: "otp",
+    //     const user = await this.userRepo.findOne({
+    //         filter: {
+    //             email,
+    //             // confirmed: { $exists: true }
+    //         },
+    //         options: {
+    //             populate: {
+    //                 path: "otp",
               
-                }
-            }
-        })
+    //             }
+    //         }
+    //     })
 
-        if (!user) {
-            throw new ForbiddenException("User is not found")
-        }
+    //     if (!user) {
+    //         throw new ForbiddenException("User is not found")
+    //     }
 
-        if(!await Compare({plainText: password, cipherText:user.password})){
-            throw new BadRequestException("Invalid code")
-        }
+    //     if(!await Compare({plainText: password, cipherText:user.password})){
+    //         throw new BadRequestException("Invalid code")
+    //     }
        
-        const accessToken = await this.TokenService.GenerateToken(
-            { payload: { email, id: user._id },
-            options: {
-                secret: user.role === userRole.USER ? process.env.SECRET_USER_TOKEN! : process.env.SECRET_ADMIN_TOKEN!,
-                expiresIn: "1y"
-            }
-            }
-        )
+    //     const accessToken = await this.TokenService.GenerateToken(
+    //         { payload: { email, id: user._id },
+    //         options: {
+    //             secret: user.role === userRole.USER ? process.env.SECRET_USER_TOKEN! : process.env.SECRET_ADMIN_TOKEN!,
+    //             expiresIn: "1y"
+    //         }
+    //         }
+    //     )
 
-        const refreshToken = await this.TokenService.GenerateToken(
-         { payload: { email, id: user._id },    
-            options: {
-                secret: user.role === userRole.USER ? process.env.REFRESH_SECRET_USER_TOKEN! : process.env.REFRESH_SECRET_ADMIN_TOKEN!,
-                expiresIn: "1y"
-             }}
-        )
+    //     const refreshToken = await this.TokenService.GenerateToken(
+    //      { payload: { email, id: user._id },    
+    //         options: {
+    //             secret: user.role === userRole.USER ? process.env.REFRESH_SECRET_USER_TOKEN! : process.env.REFRESH_SECRET_ADMIN_TOKEN!,
+    //             expiresIn: "1y"
+    //          }}
+    //     )
 
 
      
-        return { message: "user logged in successfully" ,accessToken ,refreshToken }
+    //     return { message: "user logged in successfully" ,accessToken ,refreshToken }
+    // }
+    // 
+    async login(body: loginDto) {
+    const { email, password } = body;
+
+    const user = await this.userRepo.findOne({
+        filter: { email } // Removed the 'confirmed' check completely
+    });
+
+    if (!user) {
+        throw new ForbiddenException("User is not found");
     }
+
+    // Fixed: Changed error message to "Invalid password"
+    if (!await Compare({ plainText: password, cipherText: user.password })) {
+        throw new BadRequestException("Invalid password");
+    }
+
+    const accessToken = await this.TokenService.GenerateToken({
+        payload: { email, id: user._id },
+        options: {
+            secret: user.role === userRole.USER ? process.env.SECRET_USER_TOKEN! : process.env.SECRET_ADMIN_TOKEN!,
+            expiresIn: "1y"
+        }
+    });
+
+    const refreshToken = await this.TokenService.GenerateToken({
+        payload: { email, id: user._id },
+        options: {
+            secret: user.role === userRole.USER ? process.env.REFRESH_SECRET_USER_TOKEN! : process.env.REFRESH_SECRET_ADMIN_TOKEN!,
+            expiresIn: "1y"
+        }
+    });
+
+    return { message: "user logged in successfully", accessToken, refreshToken };
+}
 
     async uploadFile(file: Express.Multer.File ,user:HUserDocument){
         return this.s3Service.uploadFile({
